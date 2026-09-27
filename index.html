@@ -1,0 +1,248 @@
+const CACHE_NAME = 'study-app-cache-v1';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  'https://cdn.jsdelivr.net/npm/chart.js'
+];
+
+// Install Event
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => {
+        return cache.addAll(urlsToCache);
+      })
+  );
+});
+
+// Fetch Event (Offline Support)
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        // Cache hit - return response
+        if (response) {
+          return response;
+        }
+        return fetch(event.request);
+      })
+  );
+আপনার জন্য একটি পূর্ণাঙ্গ, সুন্দর এবং কার্যকরী **Progressive Web App (PWA) Study App** তৈরি করেছি। এতে Pomodoro টাইমার, টু-ডু লিস্ট (Task Manager) এবং প্রতিদিনের পড়াশোনার সময়ের একটি সুন্দর **Graph (Chart.js)** থাকবে। সব ডেটা ব্রাউজারের Local Storage-এ সেভ থাকবে, তাই পেজ রিলোড দিলেও ডেটা হারাবে না। 
+
+গিটহাবের (GitHub) Root ফোল্ডারে আপলোড করার জন্য আপনাকে মাত্র **৩টি ফাইল** তৈরি করতে হবে। নিচে ফাইলগুলোর কোড দেওয়া হলো:
+
+### ১. `index.html` (মূল ফাইল - HTML, CSS, JS একসাথে)
+এই কোডটি কপি করে `index.html` নামে সেভ করুন। এতে Tailwind CSS এবং Chart.js ব্যবহার করা হয়েছে।
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Study App</title>
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#4F46E5">
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <script src="[https://cdn.jsdelivr.net/npm/chart.js](https://cdn.jsdelivr.net/npm/chart.js)"></script>
+    <link href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css)" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .glass-card { background: white; border-radius: 16px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); padding: 20px; }
+    </style>
+</head>
+<body class="text-gray-800 p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto space-y-6">
+        <!-- Header -->
+        <header class="text-center py-4">
+            <h1 class="text-3xl font-bold text-indigo-600"><i class="fas fa-book-reader"></i> StudyMate</h1>
+            <p class="text-gray-500">Track your study, manage tasks & achieve goals</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Pomodoro Timer -->
+            <div class="glass-card text-center flex flex-col justify-center items-center">
+                <h2 class="text-xl font-bold mb-4 text-gray-700">Pomodoro Timer</h2>
+                <div id="time-display" class="text-6xl font-extrabold text-indigo-600 mb-6">25:00</div>
+                <p id="timer-status" class="text-sm text-gray-500 mb-4">Ready to Focus?</p>
+                
+                <div class="space-x-3">
+                    <button onclick="startTimer()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full font-semibold transition">Start</button>
+                    <button onclick="pauseTimer()" class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded-full font-semibold transition">Pause</button>
+                    <button onclick="resetTimer()" class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-full font-semibold transition">Reset</button>
+                </div>
+            </div>
+
+            <!-- Task Manager -->
+            <div class="glass-card">
+                <h2 class="text-xl font-bold mb-4 text-gray-700">Study Tasks</h2>
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="task-input" class="w-full border-2 border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:border-indigo-500" placeholder="What to study today?">
+                    <button onclick="addTask()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"><i class="fas fa-plus"></i></button>
+                </div>
+                <ul id="task-list" class="space-y-2 max-h-48 overflow-y-auto">
+                    <!-- Tasks will appear here -->
+                </ul>
+            </div>
+        </div>
+
+        <!-- Graph / Analytics -->
+        <div class="glass-card">
+            <h2 class="text-xl font-bold mb-4 text-gray-700">Study Analytics (Last 7 Days)</h2>
+            <div class="relative h-64 w-full">
+                <canvas id="studyChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Service Worker for PWA ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('SW registered!', reg);
+                }).catch(err => console.log('SW failed', err));
+            });
+        }
+
+        // --- 2. Timer Logic ---
+        let timer;
+        let timeLeft = 25 * 60; // 25 minutes
+        let isRunning = false;
+        const timeDisplay = document.getElementById('time-display');
+        const timerStatus = document.getElementById('timer-status');
+
+        function updateDisplay() {
+            let minutes = Math.floor(timeLeft / 60);
+            let seconds = timeLeft % 60;
+            timeDisplay.innerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function startTimer() {
+            if (isRunning) return;
+            isRunning = true;
+            timerStatus.innerText = "Focusing...";
+            timer = setInterval(() => {
+                timeLeft--;
+                updateDisplay();
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    isRunning = false;
+                    alert("Time's up! You focused for 25 minutes. Great job!");
+                    addStudyTimeToGraph(25); // Add 25 mins to graph
+                    resetTimer();
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            clearInterval(timer);
+            isRunning = false;
+            timerStatus.innerText = "Paused";
+        }
+
+        function resetTimer() {
+            clearInterval(timer);
+            isRunning = false;
+            timeLeft = 25 * 60;
+            timerStatus.innerText = "Ready to Focus?";
+            updateDisplay();
+        }
+
+        // --- 3. Task Manager Logic ---
+        let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+        
+        function renderTasks() {
+            const list = document.getElementById('task-list');
+            list.innerHTML = '';
+            tasks.forEach((task, index) => {
+                const li = document.createElement('li');
+                li.className = `flex justify-between items-center p-3 bg-gray-50 rounded-lg ${task.completed ? 'line-through text-gray-400' : ''}`;
+                li.innerHTML = `
+                    <span class="cursor-pointer flex-1" onclick="toggleTask(${index})">${task.text}</span>
+                    <button onclick="deleteTask(${index})" class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+                `;
+                list.appendChild(li);
+            });
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+        }
+
+        function addTask() {
+            const input = document.getElementById('task-input');
+            if (input.value.trim() === '') return;
+            tasks.push({ text: input.value, completed: false });
+            input.value = '';
+            renderTasks();
+        }
+
+        function toggleTask(index) {
+            tasks[index].completed = !tasks[index].completed;
+            renderTasks();
+        }
+
+        function deleteTask(index) {
+            tasks.splice(index, 1);
+            renderTasks();
+        }
+
+        // --- 4. Chart / Analytics Logic ---
+        let studyData = JSON.parse(localStorage.getItem('studyData')) || {};
+        let chartInstance = null;
+
+        function getDatesAndData() {
+            const dates = [];
+            const data = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const dateString = d.toISOString().split('T')[0];
+                dates.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
+                data.push(studyData[dateString] || 0);
+            }
+            return { dates, data };
+        }
+
+        function addStudyTimeToGraph(minutes) {
+            const today = new Date().toISOString().split('T')[0];
+            studyData[today] = (studyData[today] || 0) + minutes;
+            localStorage.setItem('studyData', JSON.stringify(studyData));
+            updateChart();
+        }
+
+        function updateChart() {
+            const ctx = document.getElementById('studyChart').getContext('2d');
+            const { dates, data } = getDatesAndData();
+
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Minutes Studied',
+                        data: data,
+                        backgroundColor: 'rgba(79, 70, 229, 0.6)',
+                        borderColor: 'rgba(79, 70, 229, 1)',
+                        borderWidth: 1,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        // Initialize
+        updateDisplay();
+        renderTasks();
+        updateChart();
+    </script>
+</body>
+</html>
