@@ -1,0 +1,17 @@
+{
+  "name": "StudyMate Pro",
+  "short_name": "StudyMate",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#4F46E5",
+  "description": "A progressive web app for studying and tracking progress.",
+  "icons": [
+    {
+      "src": "[https://cdn-icons-png.flaticon.com/512/330/330996.png](https://cdn-icons-png.flaticon.com/512/330/330996.png)",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
